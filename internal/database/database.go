@@ -16,6 +16,7 @@ type Stock struct {
 func createTempTable(tx *sql.Tx, tableName string) error {
 	query := fmt.Sprintf(`
 		CREATE TABLE %s (
+			StockId INT IDENTITY(1, 1) PRIMARY KEY,
 			StockSymbol NVARCHAR(10),
 			StockName NVARCHAR(100),
 			Price DECIMAL(18, 2),
@@ -66,13 +67,26 @@ func upsert(db *sql.DB, stocks []Stock) error {
 		USING (SELECT StockSymbol, StockName, Price FROM %s) AS source
 		ON target.StockSymbol = source.StockSymbol
 		WHEN MATCHED THEN
-			UPDATE SET target.Price = source.Price, target.LastUpdated = GETDATE()
+			UPDATE SET 
+				target.Price = source.Price,
+				target.LastUpdated = GETDATE()
 		WHEN NOT MATCHED THEN
 			INSERT (StockSymbol, StockName, Price, Quantity, IsActive, LastUpdated)
 			VALUES (source.StockSymbol, source.StockName, source.Price, 10000, 1, GETDATE());
 	`, tableName)
 
 	_, err = tx.Exec(mergeQuery)
+	if err != nil {
+		return err
+	}
+
+	insertHistoriesQuery := fmt.Sprintf(`
+		INSERT INTO Histories (StockId, Price, Date)
+		SELECT StockId, Price, LastUpdated
+		FROM %s;
+	`, tableName)
+
+	_, err = tx.Exec(insertHistoriesQuery)
 	if err != nil {
 		return err
 	}
