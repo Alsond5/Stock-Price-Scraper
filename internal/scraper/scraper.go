@@ -63,26 +63,26 @@ func (s *Scraper) Connection() error {
 	return nil
 }
 
-func (s *Scraper) Scrape() ([]database.Stock, error) {
+func (s *Scraper) Scrape() ([]database.Stock, map[string]database.Stock, error) {
 	req, err := http.NewRequest(http.MethodGet, s.url, nil)
 	if err != nil {
-		return []database.Stock{}, err
+		return []database.Stock{}, nil, err
 	}
 
 	res, err := s.client.Do(req)
 	if err != nil {
-		return []database.Stock{}, err
+		return []database.Stock{}, nil, err
 	}
 
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return []database.Stock{}, errors.New("Failed to scrape the website with status code: " + strconv.Itoa(res.StatusCode))
+		return []database.Stock{}, nil, errors.New("Failed to scrape the website with status code: " + strconv.Itoa(res.StatusCode))
 	}
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return []database.Stock{}, err
+		return []database.Stock{}, nil, err
 	}
 
 	htmlContent := string(body)
@@ -99,6 +99,7 @@ func (s *Scraper) Scrape() ([]database.Stock, error) {
 	aHrefPattern := regexp.MustCompile(`<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>`)
 
 	stocks := make([]database.Stock, 0)
+	stockMap := make(map[string]database.Stock)
 
 	for _, stockContent := range stocksContent {
 		liContent := stockContent[1]
@@ -127,9 +128,10 @@ func (s *Scraper) Scrape() ([]database.Stock, error) {
 		}
 
 		stocks = append(stocks, stock)
+		stockMap[stockSymbol] = stock
 	}
 
-	return stocks, nil
+	return stocks, stockMap, nil
 }
 
 func (s *Scraper) Close() {

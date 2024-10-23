@@ -6,10 +6,11 @@ import (
 	"syscall"
 	"time"
 
+	alert "github.com/Alsond5/StockMarketAPIWebScraper/internal/Alert"
 	"github.com/Alsond5/StockMarketAPIWebScraper/internal/database"
 	"github.com/Alsond5/StockMarketAPIWebScraper/internal/logger"
-	"github.com/Alsond5/StockMarketAPIWebScraper/internal/scheduler"
 	"github.com/Alsond5/StockMarketAPIWebScraper/internal/scraper"
+	"github.com/Alsond5/StockMarketAPIWebScraper/pkg/scheduler"
 )
 
 func main() {
@@ -24,13 +25,31 @@ func main() {
 
 	s.AddJob(3*time.Minute, func() {
 		logger.Info("Scraping stocks...")
-		stocks, err := scraper.Scrape()
+		stocks, stockMap, err := scraper.Scrape()
 		if err != nil {
 			logger.Error(err.Error())
 			return
 		}
 
 		err = database.Save(stocks)
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
+
+		alerts, err := database.GetAlerts()
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
+
+		err = alert.SendAlerts(stockMap, alerts)
+		if err != nil {
+			logger.Error(err.Error())
+			return
+		}
+
+		err = database.UpdateAlerts(alerts)
 		if err != nil {
 			logger.Error(err.Error())
 			return
